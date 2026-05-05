@@ -1,0 +1,75 @@
+#!/bin/bash
+echo"下载docker"
+apt-get install ca-certificates curl gnupg -y
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.aliyun.com/docker-ce/linux/ubuntu \
+  "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+echo"配置docker镜像"
+mkdir -p /etc/docker
+cat > /etc/docker/daemon.json << EOF
+{
+  "registry-mirrors": ["https://1ms.run/"],
+  "exec-opts": ["native.cgroupdriver=systemd"]
+}
+EOF
+echo"生成containerd配置文件"
+mkdir -p /etc/containerd
+containerd config default >/etc/containerd/config.toml
+echo"开启CRI和systemd cgroup"
+sed -i 's/^disabled_plugins = \["cri"\]/disabled_plugins = []/' /etc/containerd/config.toml  
+sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+echo"配置containerd镜像"
+sed -i '/\[plugins."io.containerd.grpc.v1.cri".registry.mirrors."k8s.gcr.io"]/a \    \[plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]' /etc/containerd/config.toml
+sed -i '/\[plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]/a \      endpoint = ["https://1ms.run/"]' /etc/containerd/config.toml
+echo"配置containerd镜像"
+mkdir -p /etc/systemd/system/containerd.service.d
+cat > /etc/systemd/system/containerd.service.d/10-proxy.conf <<EOF
+[Service]
+Environment="HTTP_PROXY=http://10.81.48.250:7890"
+Environment="HTTPS_PROXY=http://10.81.48.250:7890"
+Environment="NO_PROXY=192.168.0.0/16,10.244.0.0/16，172.16.0.0/16,10.96.0.0/16,127.0.0.1,localhost"
+EOF
+systemctl daemon-reload
+systemctl restart containerd
+systemctl restart docker
+systemctl enable docker
+
+echo"安装k8s"
+apt-get update && apt-get install -y apt-transport-https
+curl -fsSL https://mirrors.aliyun.com/kubernetes-new/core/stable/v1.28/deb/Release.key |
+    gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://mirrors.aliyun.com/kubernetes-new/core/stable/v1.28/deb/ /" |
+    tee /etc/apt/sources.list.d/kubernetes.list
+apt-get update
+apt-get install -y kubelet kubeadm kubectl
+systemctl enable kubelet
+
+echo"配置集群"
+kubeadm init \
+--apiserver-advertise-address=192.168.30.130 \
+--kubernetes-version v1.28.15 \
+--service-cidr=10.96.0.0/12 \
+--pod-network-cidr=192.168.0.0/16
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+echo"安装helm和calico"
+sudo apt-get install curl gpg apt-transport-https --yes
+curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+sudo apt-get update
+sudo apt-get install helm
+
+helm repo add projectcalico https://docs.tigera.io/calico/charts
+kubectl create namespace tigera-operator
+helm template calico-crds projectcalico/crd.projectcalico.org.v1 --version v3.32.0 | kubectl apply --server-side -f -
+helm install calico projectcalico/tigera-operator --version v3.32.0 --namespace tigera-operator
+watch kubectl get pods -n calico-system
+

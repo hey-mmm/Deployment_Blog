@@ -1,0 +1,62 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: typecho
+  namespace: blog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: typecho
+  template:
+    metadata:
+      labels:
+        app: typecho
+    spec:
+      containers:
+      - name: typecho
+        image: joyqi/typecho:nightly
+        ports:
+        - containerPort: 80
+        env:
+        - name: TYPECHO_DATABASE
+          value: "mysql:host=blog-mysql;port=3306;dbname=typecho"
+        - name: TYPECHO_USER
+          value: "root"
+        - name: TYPECHO_PASSWORD
+          value: "1"
+        volumeMounts:
+        - name: typecho-persistent-storage
+          mountPath: /app/usr
+      volumes:
+      - name: typecho-persistent-storage
+        persistentVolumeClaim:
+          claimName: typecho-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: typecho-pvc
+  namespace: blog
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: blog
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: typecho-service
+  namespace: blog
+spec:
+  type: NodePort
+  selector:
+    app: typecho
+  ports:
+  - port: 80
+    targetPort: 80
+    nodePort: 30080
