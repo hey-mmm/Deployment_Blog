@@ -1,0 +1,89 @@
+#!/bin/bash
+echo"设置虚拟机代理，让流量走宿主机代理"
+export https_proxy=http://10.81.48.250:7890
+export http_proxy=http://10.81.48.250:7890
+export no_proxy="192.168.0.0/16,10.244.0.0/16，172.16.0.0/16,10.96.0.0/16,127.0.0.1,localhost"
+
+echo"设置root用户"
+echo "root:1"|sudo chpasswd
+
+echo"创建镜像源"
+sudo mkdir -p /etc/apt/sources.list.d/backup
+sudo mv /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/backup/
+sudo rm /etc/apt/sources.list.d/*.list
+sudo tee /etc/apt/sources.list.d/original.list > /dev/null << 'EOF'
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy main restricted universe multiverse
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy-updates main restricted universe multiverse
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy-backports main restricted universe multiverse
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy-security main restricted universe multiverse
+EOF
+apt clean
+apt update
+
+echo"设置主机名"
+sudo hostnamectl set-hostname node
+
+echo"安装软件"
+apt install vim -y
+
+echo"配静态ip"
+tee /etc/netplan/50-cloud-init.yaml > /dev/null << 'EOF'
+network:
+  version: 2
+  renderer: networkd  # 服务器版通常是 networkd，桌面版可能是 NetworkManager
+  ethernets:
+    ens33:            # 这里改成你的网卡名
+      dhcp4: no       # 关闭 DHCP
+      addresses:
+        - 192.168.30.131/24  # 静态IP/子网掩码（24代表255.255.255.0）
+      routes:
+        - to: default
+          via: 192.168.1.2    # 网关地址
+      nameservers:
+        addresses:
+          - 8.8.8.8           # DNS 服务器 1
+          - 114.114.114.114   # DNS 服务器 2
+EOF
+netplan apply
+ip a s
+
+echo"配置/etc/hosts文件"
+cat >> /etc/hosts <<EOF
+192.168.30.131 node
+192.168.30.130 master
+EOF
+
+echo"禁用防火墙，selinux，swap"
+sudo ufw disable
+sudo systemctl stop ufw
+sudo systemctl disable ufw
+sudo setenforce 0
+sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
+swapoff -a
+sed -ri 's/.*swap.*/#&/' /etc/fstab
+
+echo"配置内核参数"
+modprobe br_netfilter
+modprobe overlay
+cat>/etc/modules-load.d/k8s-modules.conf<<EOF
+br_netfilter
+overlay
+EOF
+cat > /etc/sysctl.d/k8s.conf << EOF
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.ipv4.ip_forward = 1
+EOF
+sysctl -p /etc/sysctl.d/k8s.conf
+
+echo"设置时间同步"
+timedatectl set-timezone Asia/Shanghai
+apt install chrony -y 
+chronyc -a makestep
+sleep 5
+
+
+
+
+
+

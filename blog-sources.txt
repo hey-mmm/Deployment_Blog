@@ -1,0 +1,38 @@
+---
+##创建namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: blog
+---
+##创建blog的pv
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: typecho-pv
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: blog
+  hostPath:
+    path: /root/k8s/blog/data/typecho
+---
+##创建mysql的pv
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mysql-pv
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: blog
+  hostPath:
+    path: /root/k8s/blog/data/mysql
+
+---

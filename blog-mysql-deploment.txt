@@ -1,0 +1,59 @@
+##创建mysql控制器
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: blog
+spec:
+  selector:
+    matchLabels:
+      app: blog-mysql
+  template:
+    metadata:
+      labels:
+        app: blog-mysql
+    spec:
+      containers:
+      - name: blog-mysql
+        image: mysql:5.7
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "1"
+        - name: MYSQL_DATABASE
+          value: "typecho"
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-pvc
+---
+##硬盘申请
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+  namespace: blog
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: blog
+  resources:
+    requests:
+      storage: 1Gi
+---
+##mysql service
+apiVersion: v1
+kind: Service
+metadata:
+  name: blog-mysql
+  namespace: blog
+spec:
+  ports:
+  - port: 3306
+  selector:
+    app: blog-mysql
+  clusterIP: None
