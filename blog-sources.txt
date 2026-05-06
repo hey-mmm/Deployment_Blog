@@ -36,3 +36,27 @@ spec:
     path: /root/k8s/blog/data/mysql
 
 ---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: typecho-config
+  namespace: blog
+data:
+  TYPECHO_DATABASE: "mysql:host=blog-mysql;port=3306;dbname=typecho"
+  TYPECHO_TIMEZONE: "Asia/Shanghai"
+
+---
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secret
+  namespace: blog
+type: Opaque
+data:
+  MYSQL_ROOT_PASSWORD: MQ== 
+  MYSQL_PASSWORD: MQ==     
+  MYSQL_USER: cm9vdA==
+
+---

@@ -19,13 +19,11 @@ spec:
         image: joyqi/typecho:nightly
         ports:
         - containerPort: 80
-        env:
-        - name: TYPECHO_DATABASE
-          value: "mysql:host=blog-mysql;port=3306;dbname=typecho"
-        - name: TYPECHO_USER
-          value: "root"
-        - name: TYPECHO_PASSWORD
-          value: "1"
+        envFrom: 
+        - configMapRef: 
+            name: typecho-config
+        - secretRef:
+                name: mysql-secret 
         volumeMounts:
         - name: typecho-persistent-storage
           mountPath: /app/usr
