@@ -1,10 +1,12 @@
-##创建mysql控制器
+
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: mysql
   namespace: blog
 spec:
+  serviceName: "blog-mysql"  
+  replicas: 1
   selector:
     matchLabels:
       app: blog-mysql
@@ -18,20 +20,20 @@ spec:
         image: mysql:5.7
         env:
         - name: MYSQL_ROOT_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: mysql-secret
-                  key: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: MYSQL_ROOT_PASSWORD
         - name: MYSQL_USER
-              valueFrom:
-                secretKeyRef:
-                  name: mysql-secret
-                  key: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: MYSQL_USER
         - name: MYSQL_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: mysql-secret
-                  key: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: MYSQL_PASSWORD
         - name: MYSQL_DATABASE
           value: "typecho"
         ports:
@@ -39,26 +41,17 @@ spec:
         volumeMounts:
         - name: mysql-persistent-storage
           mountPath: /var/lib/mysql
-      volumes:
-      - name: mysql-persistent-storage
-        persistentVolumeClaim:
-          claimName: mysql-pvc
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-persistent-storage
+    spec:
+      accessModes: [ "ReadWriteMany" ]
+      storageClassName: blog
+      resources:
+        requests:
+          storage: 1Gi
 ---
-##硬盘申请
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: mysql-pvc
-  namespace: blog
-spec:
-  accessModes:
-    - ReadWriteMany
-  storageClassName: blog
-  resources:
-    requests:
-      storage: 1Gi
----
-##mysql service
+## MySQL Service (Headless Service)
 apiVersion: v1
 kind: Service
 metadata:
@@ -69,4 +62,4 @@ spec:
   - port: 3306
   selector:
     app: blog-mysql
-  clusterIP: None
+  clusterIP: None  
