@@ -57,6 +57,6 @@ type: Opaque
 data:
   MYSQL_ROOT_PASSWORD: MQ== 
   MYSQL_PASSWORD: MQ==     
-  MYSQL_USER: cm9vdA==
+  MYSQL_USER: YmxvZw== 
 
 ---
