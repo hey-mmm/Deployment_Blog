@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: typecho
-        image: joyqi/typecho:nightly
+        image: joyqi/typecho:nightly-php8.2-apache
         ports:
         - containerPort: 80
         envFrom: 
